@@ -1,6 +1,9 @@
 import React, { useState } from "react";
+import { useDispatch } from 'react-redux';
+import { addRequest } from '../store/historySlice';
 
 const RequestForm = ({ setResponse, setLastRequest }) => {
+  const dispatch = useDispatch();
   const [url, setUrl] = useState("");
   const [method, setMethod] = useState("GET");
   const [body, setBody] = useState("");
@@ -46,11 +49,30 @@ const RequestForm = ({ setResponse, setLastRequest }) => {
       const data = await res.json();
       setResponse(data);
 
-      const history = JSON.parse(localStorage.getItem("requestHistory")) || [];
-      history.unshift({ url, method, body, timestamp: new Date().toISOString() });
-      localStorage.setItem("requestHistory", JSON.stringify(history));
+      // Add request to Redux store
+      dispatch(addRequest({
+        method,
+        url,
+        headers,
+        body: method !== 'GET' && method !== 'HEAD' ? body : undefined,
+        status: data.status || 200,
+        statusText: data.statusText || 'OK',
+        time: data.time || 0,
+        data: data
+      }));
     } catch (error) {
       setResponse({ error: error.message });
+      // Add failed request to Redux store
+      dispatch(addRequest({
+        method,
+        url,
+        headers,
+        body: method !== 'GET' && method !== 'HEAD' ? body : undefined,
+        status: 0,
+        statusText: 'Error',
+        time: 0,
+        data: { error: error.message }
+      }));
     }
   };
 
