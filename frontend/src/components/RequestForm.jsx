@@ -6,20 +6,18 @@ const RequestForm = ({ setResponse, setLastRequest }) => {
   const [body, setBody] = useState("");
   const [file, setFile] = useState(null);
 
-  // Define API descriptions
   const apiDescriptions = {
-    'https://api.example.com/users': 'This API endpoint is used to manage user data, allowing creation, retrieval, update, and deletion of user records.',
-    'https://api.example.com/products': 'This endpoint provides access to product catalog information, supporting operations like listing products, viewing details, and updating stock.',
-    // Add more API descriptions here as needed
+    'https://api.example.com/users': 'This API endpoint is used to manage user data.',
+    'https://api.example.com/products': 'This endpoint provides product catalog information.',
   };
 
   const sendRequest = async () => {
-    const currentHeaders = file ? {} : { "Content-Type": "application/json" };
+    const headers = file ? {} : { "Content-Type": "application/json" };
 
     const requestDetails = {
       url,
       method,
-      headers: currentHeaders,
+      headers,
       body: method !== 'GET' && method !== 'HEAD' ? body : undefined,
       file: file ? file.name : undefined
     };
@@ -27,41 +25,30 @@ const RequestForm = ({ setResponse, setLastRequest }) => {
 
     try {
       let fetchOptions = {
-        method,
+        method: "POST",
+        body: null
       };
 
+      const formData = new FormData();
+      formData.append('url', url);
+      formData.append('method', method);
+      formData.append('headers', JSON.stringify(headers));
       if (file) {
-        const formData = new FormData();
-        formData.append('url', url);
-        formData.append('method', method);
-        formData.append('headers', JSON.stringify(currentHeaders));
         formData.append('file', file);
-        if (method !== 'GET' && method !== 'HEAD' && body) {
-          formData.append('body', body);
-        }
-        fetchOptions.body = formData;
-      } else {
-        fetchOptions.headers = currentHeaders;
-        if (method !== 'GET' && method !== 'HEAD' && body !== undefined) {
-          fetchOptions.body = body;
-        }
+      }
+      if (method !== 'GET' && method !== 'HEAD' && body) {
+        formData.append('body', body);
       }
 
-      const res = await fetch("http://localhost:5000/api/send-request", fetchOptions);
+      fetchOptions.body = formData;
 
+      const res = await fetch("http://localhost:5000/api/send-request", fetchOptions);
       const data = await res.json();
       setResponse(data);
 
-      const newEntry = {
-        url,
-        method,
-        body: method !== "GET" ? body : null,
-        timestamp: new Date().toISOString(),
-      };
-
-      const existing = JSON.parse(localStorage.getItem("requestHistory")) || [];
-      existing.unshift(newEntry);
-      localStorage.setItem("requestHistory", JSON.stringify(existing));
+      const history = JSON.parse(localStorage.getItem("requestHistory")) || [];
+      history.unshift({ url, method, body, timestamp: new Date().toISOString() });
+      localStorage.setItem("requestHistory", JSON.stringify(history));
     } catch (error) {
       setResponse({ error: error.message });
     }
@@ -69,9 +56,10 @@ const RequestForm = ({ setResponse, setLastRequest }) => {
 
   const suggestTemplate = async () => {
     if (!url) {
-      alert("Please enter an API URL to suggest a template.");
+      alert("Please enter an API URL.");
       return;
     }
+
     try {
       const res = await fetch(`http://localhost:5000/api/suggest-template?apiIdentifier=${encodeURIComponent(url)}`);
       const template = await res.json();
@@ -80,23 +68,19 @@ const RequestForm = ({ setResponse, setLastRequest }) => {
         setMethod(template.method || "GET");
         setBody(template.body ? JSON.stringify(template.body, null, 2) : "");
       } else {
-        alert("No template found for this API URL. Try 'https://api.example.com/users' or 'https://api.example.com/products'.");
+        alert("No template found.");
       }
-    } catch (error) {
-      alert(`Failed to fetch template: ${error.message}`);
+    } catch (err) {
+      alert("Error fetching template.");
     }
   };
 
-  const currentApiDescription = apiDescriptions[url] || ''; // Get description based on current URL
+  const currentApiDescription = apiDescriptions[url] || "";
 
   return (
     <div className="bg-gray-800 p-6 rounded-lg shadow-xl text-white">
       <div className="flex gap-3 mb-2">
-        <select
-          value={method}
-          onChange={(e) => setMethod(e.target.value)}
-          className="border border-gray-600 bg-gray-700 text-white p-2 rounded-md focus:ring-accent-blue focus:border-accent-blue outline-none"
-        >
+        <select value={method} onChange={(e) => setMethod(e.target.value)} className="bg-gray-700 text-white p-2 rounded-md">
           <option>GET</option>
           <option>POST</option>
           <option>PUT</option>
@@ -107,42 +91,33 @@ const RequestForm = ({ setResponse, setLastRequest }) => {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="Enter API URL"
-          className="flex-grow border border-gray-600 bg-gray-700 text-white p-2 rounded-md focus:ring-accent-blue focus:border-accent-blue outline-none placeholder-gray-400"
+          className="flex-grow bg-gray-700 text-white p-2 rounded-md"
         />
-        <button
-          onClick={sendRequest}
-          className="bg-accent-blue text-white px-6 py-2 rounded-md font-semibold hover:bg-blue-500 transition-colors duration-300"
-        >
+        <button onClick={sendRequest} className="bg-accent-blue px-4 py-2 rounded-md font-semibold">
           Send
         </button>
-        <button
-          onClick={suggestTemplate}
-          className="bg-gray-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-gray-700 transition-colors duration-300"
-        >
+        <button onClick={suggestTemplate} className="bg-gray-600 px-4 py-2 rounded-md font-semibold">
           Suggest Template
         </button>
       </div>
-      {currentApiDescription && (
-        <p className="text-gray-400 text-sm mb-4">{currentApiDescription}</p> // Display description
-      )}
-
-      {method !== "GET" && method !== "HEAD" && ( // Show body/file input for non-GET/HEAD methods
+      {currentApiDescription && <p className="text-gray-400 text-sm mb-4">{currentApiDescription}</p>}
+      {method !== "GET" && method !== "HEAD" && (
         <div className="mb-4">
           <textarea
             rows={6}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder='Enter JSON body'
-            className="w-full border border-gray-600 bg-gray-700 text-white p-2 rounded-md font-mono focus:ring-accent-blue focus:border-accent-blue outline-none placeholder-gray-400"
+            placeholder="Enter JSON body"
+            className="w-full bg-gray-700 text-white p-2 rounded-md font-mono"
           />
-          <label className="block mt-2 text-sm font-medium">
-            Upload File (optional):
+          <label className="block mt-2 text-sm">
+            Upload File:
             <input
               type="file"
               onChange={(e) => setFile(e.target.files[0])}
-              className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-accent-blue file:text-white hover:file:bg-blue-500"
+              className="block mt-1 text-sm text-white"
             />
-            {file && <p className="text-gray-400 text-xs mt-1">Selected: {file.name}</p>}
+            {file && <p className="text-xs mt-1 text-gray-400">Selected: {file.name}</p>}
           </label>
         </div>
       )}
